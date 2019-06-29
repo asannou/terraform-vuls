@@ -1,23 +1,17 @@
-variable "aws_region" {
-  type = "string"
-}
-
-provider "aws" {
-  region = "${var.aws_region}"
-}
+data "aws_region" "region" {}
 
 data "aws_caller_identity" "aws" {}
 
-variable "vuls_account_id" {
+variable "scanner_account_id" {
   type = "string"
 }
 
-variable "vuls_role" {
+variable "scanner_role" {
   type = "string"
 }
 
 resource "aws_iam_role" "vuls" {
-  name = "VulsRole-${var.vuls_account_id}"
+  name = "VulsRole-${var.scanner_account_id}"
   path = "/"
   assume_role_policy = "${data.aws_iam_policy_document.vuls.json}"
 }
@@ -26,7 +20,7 @@ data "aws_iam_policy_document" "vuls" {
   statement {
     principals {
       type = "AWS"
-      identifiers = ["arn:aws:iam::${var.vuls_account_id}:role/${var.vuls_role}"]
+      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
     }
     actions = ["sts:AssumeRole"]
   }
@@ -46,13 +40,13 @@ data "aws_iam_policy_document" "vuls-ssm" {
   statement {
     actions = ["ssm:SendCommand"]
     resources = [
-      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.aws.account_id}:document/${aws_ssm_document.vuls.name}",
+      "arn:aws:ssm:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:document/${aws_ssm_document.vuls.name}",
       "arn:aws:s3:::${aws_s3_bucket.vuls.bucket}"
     ]
   }
   statement {
     actions = ["ssm:SendCommand"]
-    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.aws.account_id}:instance/*"]
+    resources = ["arn:aws:ec2:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:instance/*"]
     condition {
       test = "StringEquals"
       variable = "ssm:resourceTag/Vuls"
@@ -131,7 +125,7 @@ locals {
         action = "aws:runShellScript",
         name = "runShellScript",
         inputs = {
-          runCommand = "${split("\n", file("create_vuls_user.sh"))}"
+          runCommand = "${split("\n", file("${path.module}/create_vuls_user.sh"))}"
         }
       }
     ]
@@ -145,7 +139,7 @@ resource "aws_ssm_document" "vuls" {
 }
 
 resource "aws_s3_bucket" "vuls" {
-  bucket = "vuls-ssm-${var.vuls_account_id}-${data.aws_caller_identity.aws.account_id}"
+  bucket = "vuls-ssm-${var.scanner_account_id}-${data.aws_caller_identity.aws.account_id}"
   acl = "private"
   force_destroy = true
 }

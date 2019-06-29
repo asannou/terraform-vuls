@@ -1,11 +1,3 @@
-variable "aws_region" {
-  type = "string"
-}
-
-provider "aws" {
-  region = "${var.aws_region}"
-}
-
 data "aws_caller_identity" "aws" {}
 
 variable "target_account_ids" {

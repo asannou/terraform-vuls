@@ -1,9 +1,9 @@
-variable "vuls_account_id" {
-  default = ""
+variable "scanner_account_id" {
+  type = "string"
 }
 
 variable "subnet_ids" {
-  default = []
+  type = "list"
 }
 
 variable "base_port" {
@@ -40,7 +40,7 @@ resource "aws_vpc_endpoint_service" "vpce-service" {
 
 resource "aws_vpc_endpoint_service_allowed_principal" "principal" {
   vpc_endpoint_service_id = "${aws_vpc_endpoint_service.vpce-service.id}"
-  principal_arn = "arn:aws:iam::${var.vuls_account_id}:root"
+  principal_arn = "arn:aws:iam::${var.scanner_account_id}:root"
 }
 
 resource "aws_lb" "nlb" {

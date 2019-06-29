@@ -9,7 +9,7 @@
       "key": "\(.name)_\(.id)",
       "value": {
         "source": "./vpce_svc",
-        "vuls_account_id": "${var.vuls_account_id}",
+        "scanner_account_id": "${var.scanner_account_id}",
         "subnet_ids": ["\($id)"]
       }
     }

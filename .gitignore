@@ -1,7 +1,4 @@
-config.toml
-cve.sqlite3*
-oval.sqlite3
-go-cve-dictionary-log
-log
-results
-ssh
+.terraform
+terraform.tfstate*
+terraform.tfvars
+*.zip
