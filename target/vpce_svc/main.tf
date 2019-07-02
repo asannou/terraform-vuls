@@ -33,8 +33,8 @@ data "aws_instance" "target" {
 resource "aws_vpc_endpoint_service" "vpce-service" {
   acceptance_required = true
   network_load_balancer_arns = ["${aws_lb.nlb.arn}"]
-  provisioner "local-exec" {
-    command = "aws ec2 create-tags --resources ${aws_vpc_endpoint_service.vpce-service.id} --tags Key=Name,Value=vuls"
+  tags = {
+    Name = "vuls"
   }
 }
 
@@ -48,7 +48,7 @@ resource "aws_lb" "nlb" {
   internal = true
   load_balancer_type = "network"
   subnets = ["${var.subnet_ids}"]
-  tags {
+  tags = {
     Name = "vuls"
   }
 }
@@ -82,7 +82,7 @@ resource "aws_lb_target_group_attachment" "nlb" {
 resource "aws_security_group" "nlb" {
   name_prefix = "vuls-"
   vpc_id = "${data.aws_subnet.subnet.vpc_id}"
-  tags {
+  tags = {
     Name = "vuls"
   }
 }
