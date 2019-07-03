@@ -43,7 +43,7 @@ assumed_aws() {
 describe_security_group() {
   aws --output text \
     ec2 describe-security-groups \
-    --filters 'Name=group-name,Values=vuls-privatelink' "Name=vpc-id,Values=$VPC_ID" \
+    --filters 'Name=group-name,Values=vuls-vpce' "Name=vpc-id,Values=$VPC_ID" \
     --query 'SecurityGroups[0].GroupId'
 }
 

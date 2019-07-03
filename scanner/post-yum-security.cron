@@ -1,0 +1,2 @@
+#!/bin/bash
+/sbin/grubby --default-kernel | /bin/grep -q "$(/bin/uname -r)" || /sbin/reboot
