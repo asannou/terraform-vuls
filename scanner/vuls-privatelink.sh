@@ -11,11 +11,13 @@ ACCOUNT_ID=$(aws sts get-caller-identity --output text --query Account)
 TARGET_ACCOUNT_ID=$1
 shift
 
-MAC=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n 1)
-VPC_ID=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/${MAC}vpc-id)
-SUBNET_ID=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/${MAC}subnet-id)
+METADATA_URL=http://169.254.169.254/latest/meta-data
+MACS_URL=$METADATA_URL/network/interfaces/macs
+MAC=$(curl -s $MACS_URL/ | head -n 1)
+VPC_ID=$(curl -s $MACS_URL/${MAC}vpc-id)
+SUBNET_ID=$(curl -s $MACS_URL/${MAC}subnet-id)
 ROLE_ARN=arn:aws:iam::$TARGET_ACCOUNT_ID:role/VulsRole-$ACCOUNT_ID
-ROLE_SESSION_NAME=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+ROLE_SESSION_NAME=$(curl -s $METADATA_URL/instance-id)
 BUCKET_NAME=vuls-ssm-$ACCOUNT_ID-$TARGET_ACCOUNT_ID
 
 KNOWN_HOSTS_TEMP=$(mktemp)
@@ -287,7 +289,7 @@ make_known_hosts() {
 
 setup() {
   vpce_ids=$(make_server_configs)
-  echo $vpce_ids
+  trap "delete_vpces $vpce_ids; rm $KNOWN_HOSTS_TEMP" EXIT
 
   command_id=$(send_public_key)
   test -z "$command_id" && return
@@ -327,11 +329,8 @@ cp $(dirname $0)/config.toml.default config.toml
 
 assume_role
 
-vpce_ids=$(setup)
+setup
 run_cve fetchnvd -last2y
 run_cve fetchjvn -last2y
 run_vuls scan && run_vuls report "$@" || true
-
-delete_vpces $vpce_ids
-rm $KNOWN_HOSTS_TEMP
 
