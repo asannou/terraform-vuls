@@ -1,12 +1,16 @@
 data "aws_region" "region" {}
 
+data "aws_availability_zones" "az" {
+  state = "available"
+}
+
 data "aws_caller_identity" "aws" {}
 
 variable "vpc_id" {
   type = "string"
 }
 
-variable "subnet_id" {
+variable "cidr_block" {
   type = "string"
 }
 
@@ -16,6 +20,16 @@ variable "instance_type" {
 
 variable "target_account_ids" {
   type = "list"
+}
+
+resource "aws_subnet" "vpce" {
+  count = "${length(data.aws_availability_zones.az.zone_ids)}"
+  vpc_id = "${var.vpc_id}"
+  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[count.index]}"
+  cidr_block = "${cidrsubnet(var.cidr_block, 3, count.index)}"
+  tags = {
+    Name = "vuls-vpce-${data.aws_availability_zones.az.zone_ids[count.index]}"
+  }
 }
 
 resource "aws_security_group" "egress" {
@@ -127,7 +141,7 @@ data "aws_iam_policy_document" "ssm" {
 resource "aws_instance" "vuls" {
   ami = "${data.aws_ami.ami.id}"
   instance_type = "${var.instance_type}"
-  subnet_id = "${var.subnet_id}"
+  subnet_id = "${aws_subnet.vpce.*.id[0]}"
   associate_public_ip_address = true
   vpc_security_group_ids = [
     "${aws_security_group.egress.id}",
@@ -144,7 +158,6 @@ resource "aws_instance" "vuls" {
     Name = "vuls"
   }
 }
-
 
 resource "aws_iam_policy" "vuls" {
   count = "${length(var.target_account_ids)}"
@@ -174,6 +187,7 @@ resource "aws_iam_policy" "vuls-vpce" {
 data "aws_iam_policy_document" "vuls-vpce" {
   statement {
     actions = [
+      "ec2:DescribeSubnets",
       "ec2:DescribeSecurityGroups",
       "ec2:DescribeVpcEndpoints"
     ]

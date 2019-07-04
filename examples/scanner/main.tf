@@ -10,7 +10,7 @@ variable "vpc_id" {
   type = "string"
 }
 
-variable "subnet_id" {
+variable "cidr_block" {
   type = "string"
 }
 
@@ -25,7 +25,7 @@ variable "target_account_ids" {
 module "scanner" {
   source = "github.com/asannou/terraform-vuls//scanner"
   vpc_id = "${var.vpc_id}"
-  subnet_id = "${var.subnet_id}"
+  cidr_block = "${var.cidr_block}"
   instance_type = "${var.instance_type}"
   target_account_ids = ["${var.target_account_ids}"]
 }

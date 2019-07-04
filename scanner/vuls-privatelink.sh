@@ -15,7 +15,6 @@ METADATA_URL=http://169.254.169.254/latest/meta-data
 MACS_URL=$METADATA_URL/network/interfaces/macs
 MAC=$(curl -s $MACS_URL/ | head -n 1)
 VPC_ID=$(curl -s $MACS_URL/${MAC}vpc-id)
-SUBNET_ID=$(curl -s $MACS_URL/${MAC}subnet-id)
 ROLE_ARN=arn:aws:iam::$TARGET_ACCOUNT_ID:role/VulsRole-$ACCOUNT_ID
 ROLE_SESSION_NAME=$(curl -s $METADATA_URL/instance-id)
 BUCKET_NAME=vuls-ssm-$ACCOUNT_ID-$TARGET_ACCOUNT_ID
@@ -51,7 +50,21 @@ describe_vpce_svc() {
   assumed_aws --output text \
     ec2 describe-vpc-endpoint-service-configurations \
     --filters 'Name=tag:Name,Values=vuls' \
-    --query 'ServiceConfigurations[].[ServiceId,ServiceName,NetworkLoadBalancerArns[0]]'
+    --query 'ServiceConfigurations[].[ServiceId,ServiceName,NetworkLoadBalancerArns[0],AvailabilityZones[0]]'
+}
+
+describe_az() {
+  assumed_aws --output text \
+    ec2 describe-availability-zones \
+    --zone-names $1 \
+    --query 'AvailabilityZones[0].ZoneId'
+}
+
+describe_subnet() {
+  aws --output text \
+    ec2 describe-subnets \
+    --filters "Name=tag:Name,Values=vuls-vpce-$1" "Name=availability-zone-id,Values=$1" \
+    --query 'Subnets[0].SubnetId'
 }
 
 create_tag() {
@@ -68,7 +81,7 @@ create_vpce() {
     --vpc-endpoint-type Interface \
     --service-name $1 \
     --vpc-id $VPC_ID \
-    --subnet-ids $SUBNET_ID \
+    --subnet-ids $2 \
     --security-group-ids $security_group \
     --query 'VpcEndpoint.[VpcEndpointId,DnsEntries[0].DnsName]'
 }
@@ -176,8 +189,10 @@ create_vpces() {
     vpce_svc_id=$1
     vpce_svc_name=$2
     vpce_svc_lb=$3
+    vpce_svc_az=$(describe_az $4)
+    vpce_svc_subnet_id=$(describe_subnet $vpce_svc_az)
 
-    set -- $(create_vpce $vpce_svc_name)
+    set -- $(create_vpce $vpce_svc_name $vpce_svc_subnet_id)
     vpce_id=$1
     vpce_name=$2
 

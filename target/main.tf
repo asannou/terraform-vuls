@@ -77,6 +77,7 @@ resource "aws_iam_policy" "vuls-privatelink" {
 data "aws_iam_policy_document" "vuls-privatelink" {
   statement {
     actions = [
+      "ec2:DescribeAvailabilityZones",
       "ec2:DescribeInstances",
       "ec2:DescribeVpcEndpointServiceConfigurations"
     ]
