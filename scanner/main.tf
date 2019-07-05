@@ -26,9 +26,83 @@ resource "aws_subnet" "vpce" {
   count = "${length(data.aws_availability_zones.az.zone_ids)}"
   vpc_id = "${var.vpc_id}"
   availability_zone_id = "${data.aws_availability_zones.az.zone_ids[count.index]}"
-  cidr_block = "${cidrsubnet(var.cidr_block, 3, count.index)}"
+  cidr_block = "${cidrsubnet(var.cidr_block, 3, 1 + count.index)}"
+  map_public_ip_on_launch = false
   tags = {
     Name = "vuls-vpce-${data.aws_availability_zones.az.zone_ids[count.index]}"
+  }
+}
+
+resource "aws_route_table_association" "vuls" {
+  count = "${length(aws_subnet.vpce.*.id)}"
+  subnet_id = "${aws_subnet.vpce.*.id[count.index]}"
+  route_table_id = "${aws_route_table.vuls.id}"
+}
+
+resource "aws_route_table" "vuls" {
+  vpc_id = "${var.vpc_id}"
+  route {
+    cidr_block = "54.72.0.0/13"
+    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
+  }
+  route {
+    cidr_block = "54.80.0.0/12"
+    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
+  }
+  route {
+    cidr_block = "192.218.0.0/16"
+    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
+  }
+  tags = {
+    Name = "vuls"
+  }
+}
+
+resource "aws_subnet" "nat" {
+  vpc_id = "${var.vpc_id}"
+  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[0]}"
+  cidr_block = "${cidrsubnet(var.cidr_block, 3, 0)}"
+  map_public_ip_on_launch = false
+  tags = {
+    Name = "vuls-nat"
+  }
+}
+
+resource "aws_nat_gateway" "vuls" {
+  allocation_id = "${aws_eip.nat.id}"
+  subnet_id = "${aws_subnet.nat.id}"
+  tags = {
+    Name = "vuls"
+  }
+}
+
+resource "aws_eip" "nat" {
+  vpc = true
+  tags = {
+    Name = "vuls-nat"
+  }
+}
+
+resource "aws_route_table_association" "nat" {
+  subnet_id = "${aws_subnet.nat.id}"
+  route_table_id = "${aws_route_table.nat.id}"
+}
+
+resource "aws_route_table" "nat" {
+  vpc_id = "${var.vpc_id}"
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = "${data.aws_internet_gateway.nat.id}"
+  }
+  tags = {
+    Name = "vuls-nat"
+  }
+}
+
+data "aws_internet_gateway" "nat" {
+  filter {
+    name = "attachment.vpc-id"
+    values = ["${var.vpc_id}"]
   }
 }
 
@@ -142,7 +216,7 @@ resource "aws_instance" "vuls" {
   ami = "${data.aws_ami.ami.id}"
   instance_type = "${var.instance_type}"
   subnet_id = "${aws_subnet.vpce.*.id[0]}"
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   vpc_security_group_ids = [
     "${aws_security_group.egress.id}",
     "${aws_security_group.scanner.id}"

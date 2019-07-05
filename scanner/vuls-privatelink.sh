@@ -7,7 +7,8 @@ export AWS_DEFAULT_REGION=ap-northeast-1
 DOCKER_IMAGE=vuls/vuls@sha256:6cfecadb1d5b17c32375a1a2e814e15955c140c67e338024db0c6e81c3560c80
 DOCKER_CVE_IMAGE=vuls/go-cve-dictionary
 
-ACCOUNT_ID=$(aws sts get-caller-identity --output text --query Account)
+STS_ENDPOINT=https://sts.$AWS_DEFAULT_REGION.amazonaws.com
+ACCOUNT_ID=$(aws --endpoint $STS_ENDPOINT sts get-caller-identity --output text --query Account)
 TARGET_ACCOUNT_ID=$1
 shift
 
@@ -22,7 +23,8 @@ BUCKET_NAME=vuls-ssm-$ACCOUNT_ID-$TARGET_ACCOUNT_ID
 KNOWN_HOSTS_TEMP=$(mktemp)
 
 assume_role() {
-  set -- $(aws sts assume-role \
+  set -- $(aws --endpoint $STS_ENDPOINT \
+    sts assume-role \
     --role-arn $ROLE_ARN \
     --role-session-name $ROLE_SESSION_NAME \
     --output text \
