@@ -237,7 +237,7 @@ data "aws_iam_policy_document" "api" {
       identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
     }
     actions = ["execute-api:Invoke"]
-    resources = ["execute-api:/*/${local.api_http_method}/${local.api_path}"]
+    resources = ["arn:aws:execute-api:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:*/*/${local.api_http_method}/${local.api_path}"]
   }
 }
 
@@ -292,6 +292,9 @@ resource "aws_api_gateway_deployment" "vuls" {
     "aws_api_gateway_integration.post-accept-vpc-endpoint-connections",
     "aws_api_gateway_integration_response.post-accept-vpc-endpoint-connections",
   ]
+  variables {
+    depends_on = "${md5(aws_api_gateway_rest_api.vuls.policy)}"
+  }
   rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
   stage_name = "prod"
 }
