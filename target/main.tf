@@ -216,3 +216,83 @@ data "aws_iam_policy_document" "lambda" {
     resources = ["*"]
   }
 }
+
+locals {
+  api_http_method = "POST"
+  api_path = "accept-vpc-endpoint-connections"
+}
+
+resource "aws_api_gateway_rest_api" "vuls" {
+  name = "vuls"
+  policy = "${data.aws_iam_policy_document.api.json}"
+  endpoint_configuration {
+    types = ["PRIVATE"]
+  }
+}
+
+data "aws_iam_policy_document" "api" {
+  statement {
+    principals {
+      type = "AWS"
+      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
+    }
+    actions = ["execute-api:Invoke"]
+    resources = ["execute-api:/*/${local.api_http_method}/${local.api_path}"]
+  }
+}
+
+resource "aws_api_gateway_resource" "accept-vpc-endpoint-connections" {
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  parent_id = "${aws_api_gateway_rest_api.vuls.root_resource_id}"
+  path_part = "${local.api_path}"
+}
+
+resource "aws_api_gateway_method" "post-accept-vpc-endpoint-connections" {
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
+  http_method = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post-accept-vpc-endpoint-connections" {
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
+  http_method = "${local.api_http_method}"
+  type = "AWS"
+  integration_http_method = "${local.api_http_method}"
+  uri = "arn:aws:apigateway:${data.aws_region.region.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.lambda.arn}/invocations"
+}
+
+resource "aws_api_gateway_method_response" "200" {
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
+  http_method = "${local.api_http_method}"
+  status_code = "200"
+}
+
+resource "aws_api_gateway_integration_response" "post-accept-vpc-endpoint-connections" {
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
+  http_method = "${local.api_http_method}"
+  status_code = "${aws_api_gateway_method_response.200.status_code}"
+}
+
+resource "aws_lambda_permission" "vuls" {
+  action = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.lambda.function_name}"
+  principal = "apigateway.amazonaws.com"
+  source_arn = "arn:aws:execute-api:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:${aws_api_gateway_rest_api.vuls.id}/*/${local.api_http_method}/${local.api_path}"
+}
+
+resource "aws_api_gateway_deployment" "vuls" {
+  depends_on = [
+    "aws_api_gateway_resource.accept-vpc-endpoint-connections",
+    "aws_api_gateway_method.post-accept-vpc-endpoint-connections",
+    "aws_api_gateway_method_response.200",
+    "aws_api_gateway_integration.post-accept-vpc-endpoint-connections",
+    "aws_api_gateway_integration_response.post-accept-vpc-endpoint-connections",
+  ]
+  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
+  stage_name = "prod"
+}
+

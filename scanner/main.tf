@@ -235,7 +235,7 @@ resource "aws_instance" "vuls" {
 
 resource "aws_iam_policy" "vuls" {
   count = "${length(var.target_account_ids)}"
-  name = "STSAssumeRoleVuls-${var.target_account_ids[count.index]}"
+  name = "VulsAssumeRole-${var.target_account_ids[count.index]}"
   policy = "${data.aws_iam_policy_document.vuls.*.json[count.index]}"
 }
 
@@ -251,6 +251,26 @@ resource "aws_iam_role_policy_attachment" "vuls" {
   count = "${length(var.target_account_ids)}"
   role = "${aws_iam_role.vuls.name}"
   policy_arn = "${aws_iam_policy.vuls.*.arn[count.index]}"
+}
+
+resource "aws_iam_policy" "vuls-api" {
+  count = "${length(var.target_account_ids)}"
+  name = "VulsAPIGatewayInvoke-${var.target_account_ids[count.index]}"
+  policy = "${data.aws_iam_policy_document.vuls-api.*.json[count.index]}"
+}
+
+data "aws_iam_policy_document" "vuls-api" {
+  count = "${length(var.target_account_ids)}"
+  statement {
+    actions = ["execute-api:Invoke"]
+    resources = ["arn:aws:execute-api:${data.aws_region.region.name}:${var.target_account_ids[count.index]}:*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "vuls-api" {
+  count = "${length(var.target_account_ids)}"
+  role = "${aws_iam_role.vuls.name}"
+  policy_arn = "${aws_iam_policy.vuls-api.*.arn[count.index]}"
 }
 
 resource "aws_iam_policy" "vuls-vpce" {
