@@ -153,8 +153,8 @@ module "vuls-ssh-command" {
 resource "aws_s3_bucket_object" "vuls" {
   bucket = "${aws_s3_bucket.vuls.bucket}"
   key = "vuls-ssh-command.sh"
-  content = "${module.vuls-ssh-command.content}"
-  etag = "${md5(module.vuls-ssh-command.content)}"
+  source = "${module.vuls-ssh-command.filename}"
+  etag = "${md5(module.vuls-ssh-command.filename)}"
 }
 
 resource "aws_lambda_function" "lambda" {
@@ -237,7 +237,7 @@ data "aws_iam_policy_document" "api" {
       identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
     }
     actions = ["execute-api:Invoke"]
-    resources = ["arn:aws:execute-api:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:*/*/${local.api_http_method}/${local.api_path}"]
+    resources = ["arn:aws:execute-api:*:*:*/*/${local.api_http_method}/${local.api_path}"]
   }
 }
 
@@ -250,8 +250,8 @@ resource "aws_api_gateway_resource" "accept-vpc-endpoint-connections" {
 resource "aws_api_gateway_method" "post-accept-vpc-endpoint-connections" {
   rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
   resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
-  http_method = "POST"
-  authorization = "NONE"
+  http_method = "${local.api_http_method}"
+  authorization = "AWS_IAM"
 }
 
 resource "aws_api_gateway_integration" "post-accept-vpc-endpoint-connections" {
