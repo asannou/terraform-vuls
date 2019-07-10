@@ -1,18 +1,17 @@
 #!/bin/sh
 
-set -e
+set -eu
 
-export AWS_DEFAULT_REGION=ap-northeast-1
+METADATA_URL=http://169.254.169.254/latest/meta-data
 
-DOCKER_IMAGE=vuls/vuls@sha256:6cfecadb1d5b17c32375a1a2e814e15955c140c67e338024db0c6e81c3560c80
-DOCKER_CVE_IMAGE=vuls/go-cve-dictionary
+AWS_DEFAULT_REGION=$(curl -s $METADATA_URL/placement/availability-zone | sed 's/.$//')
+export AWS_DEFAULT_REGION
 
 STS_ENDPOINT=https://sts.$AWS_DEFAULT_REGION.amazonaws.com
 ACCOUNT_ID=$(aws --endpoint $STS_ENDPOINT sts get-caller-identity --output text --query Account)
 TARGET_ACCOUNT_ID=$1
 shift
 
-METADATA_URL=http://169.254.169.254/latest/meta-data
 MACS_URL=$METADATA_URL/network/interfaces/macs
 MAC=$(curl -s $MACS_URL/ | head -n 1)
 VPC_ID=$(curl -s $MACS_URL/${MAC}vpc-id)
@@ -21,6 +20,8 @@ ROLE_SESSION_NAME=$(curl -s $METADATA_URL/instance-id)
 BUCKET_NAME=vuls-ssm-$ACCOUNT_ID-$TARGET_ACCOUNT_ID
 
 KNOWN_HOSTS_TEMP=$(mktemp)
+DOCKER_IMAGE=vuls/vuls@sha256:6cfecadb1d5b17c32375a1a2e814e15955c140c67e338024db0c6e81c3560c80
+DOCKER_CVE_IMAGE=vuls/go-cve-dictionary
 
 assume_role() {
   set -- $(aws --endpoint $STS_ENDPOINT \
@@ -88,13 +89,20 @@ create_vpce() {
     --query 'VpcEndpoint.[VpcEndpointId,DnsEntries[0].DnsName]'
 }
 
+get_rest_api_id() {
+  assumed_aws --output text \
+    apigateway get-rest-apis \
+    --query 'items[?name==`vuls`].id'
+}
+
 accept_vpce() {
   outfile=$(mktemp)
-  assumed_aws --output text \
-    lambda invoke \
-    --function-name vuls-accept-vpc-endpoint-connections \
-    --payload '{"serviceId": "'$1'", "vpcEndpointIds": ["'$2'"]}' \
-    $outfile > /dev/null
+  api_id=$(get_rest_api_id)
+  invoke_url="https://$api_id.execute-api.$AWS_DEFAULT_REGION.amazonaws.com/prod/accept-vpc-endpoint-connections"
+  ./awscurl-lite \
+    -X POST \
+    -d '{"serviceId": "'$1'", "vpcEndpointIds": ["'$2'"]}' \
+    $invoke_url > $outfile
   jp.py -f $outfile 'Unsuccessful[]'
   rm $outfile
 }

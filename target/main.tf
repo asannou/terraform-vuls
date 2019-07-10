@@ -84,8 +84,8 @@ data "aws_iam_policy_document" "vuls-privatelink" {
     resources = ["*"]
   }
   statement {
-    actions = ["lambda:InvokeFunction"]
-    resources = ["${aws_lambda_function.lambda.arn}"]
+    actions = ["apigateway:GET"]
+    resources = ["*"]
   }
   statement {
     actions = [

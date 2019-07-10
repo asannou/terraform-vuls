@@ -12,6 +12,8 @@ runcmd:
  - yum -y update
  - start amazon-ssm-agent
  - chkconfig yum-cron on
+ - curl -L -o /root/vuls/awscurl-lite https://gist.github.com/asannou/3a86f9e85275f99bd1f9a5432adf2408/raw/awscurl-lite
+ - chmod +x /root/vuls/awscurl-lite
 
 write_files:
  - encoding: b64
