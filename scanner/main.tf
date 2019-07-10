@@ -42,15 +42,7 @@ resource "aws_route_table_association" "vuls" {
 resource "aws_route_table" "vuls" {
   vpc_id = "${var.vpc_id}"
   route {
-    cidr_block = "54.72.0.0/13"
-    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
-  }
-  route {
-    cidr_block = "54.80.0.0/12"
-    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
-  }
-  route {
-    cidr_block = "192.218.0.0/16"
+    cidr_block = "0.0.0.0/0"
     nat_gateway_id = "${aws_nat_gateway.vuls.id}"
   }
   tags = {
