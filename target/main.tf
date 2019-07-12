@@ -260,7 +260,7 @@ resource "aws_api_gateway_integration" "post-accept-vpc-endpoint-connections" {
   http_method = "${local.api_http_method}"
   type = "AWS"
   integration_http_method = "${local.api_http_method}"
-  uri = "arn:aws:apigateway:${data.aws_region.region.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.lambda.arn}/invocations"
+  uri = "${aws_lambda_function.lambda.invoke_arn}"
 }
 
 resource "aws_api_gateway_method_response" "200" {
