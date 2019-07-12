@@ -331,11 +331,7 @@ resource "aws_security_group_rule" "vpce-ingress" {
   source_security_group_id = "${aws_security_group.scanner.id}"
 }
 
-output "scanner_account_id" {
-  value = "${data.aws_caller_identity.aws.account_id}"
-}
-
-output "scanner_role" {
-  value = "${aws_iam_role.vuls.name}"
+output "instance_subnet_id" {
+  value = "${aws_instance.vuls.subnet_id}"
 }
 
