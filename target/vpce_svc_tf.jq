@@ -1,9 +1,4 @@
-[
-  .Subnets[] | {
-    "name": .Tags[] | select(.Key == "Name") | .Value,
-    "id": .SubnetId
-  }
-] | {
+{
   "module": [
     .[] | .id as $id | {
       "key": "\(.name)_\(.id)",
