@@ -6,8 +6,8 @@ variable "scanner_account_id" {
   type = "string"
 }
 
-variable "scanner_role" {
-  type = "string"
+locals {
+  scanner_role = "EC2RoleVuls"
 }
 
 resource "aws_iam_role" "vuls" {
@@ -20,7 +20,7 @@ data "aws_iam_policy_document" "vuls" {
   statement {
     principals {
       type = "AWS"
-      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
+      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${local.scanner_role}"]
     }
     actions = ["sts:AssumeRole"]
   }
@@ -234,7 +234,7 @@ data "aws_iam_policy_document" "api" {
   statement {
     principals {
       type = "AWS"
-      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
+      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${local.scanner_role}"]
     }
     actions = ["execute-api:Invoke"]
     resources = ["arn:aws:execute-api:*:*:*/*/${local.api_http_method}/${local.api_path}"]
