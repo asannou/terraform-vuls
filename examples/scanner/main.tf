@@ -14,6 +14,10 @@ variable "cidr_block" {
   type = "string"
 }
 
+variable "nat_gateway_id" {
+  type = "string"
+}
+
 variable "instance_type" {
   type = "string"
 }
@@ -26,6 +30,7 @@ module "scanner" {
   source = "github.com/asannou/terraform-vuls//scanner"
   vpc_id = "${var.vpc_id}"
   cidr_block = "${var.cidr_block}"
+  nat_gateway_id = "${var.nat_gateway_id}"
   instance_type = "${var.instance_type}"
   target_account_ids = ["${var.target_account_ids}"]
 }

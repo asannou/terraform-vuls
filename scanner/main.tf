@@ -14,6 +14,10 @@ variable "cidr_block" {
   type = "string"
 }
 
+variable "nat_gateway_id" {
+  type = "string"
+}
+
 variable "instance_type" {
   type = "string"
 }
@@ -43,58 +47,10 @@ resource "aws_route_table" "vuls" {
   vpc_id = "${var.vpc_id}"
   route {
     cidr_block = "0.0.0.0/0"
-    nat_gateway_id = "${aws_nat_gateway.vuls.id}"
+    nat_gateway_id = "${var.nat_gateway_id}"
   }
   tags = {
     Name = "vuls"
-  }
-}
-
-resource "aws_subnet" "nat" {
-  vpc_id = "${var.vpc_id}"
-  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[0]}"
-  cidr_block = "${cidrsubnet(var.cidr_block, 3, 0)}"
-  map_public_ip_on_launch = false
-  tags = {
-    Name = "vuls-nat"
-  }
-}
-
-resource "aws_nat_gateway" "vuls" {
-  allocation_id = "${aws_eip.nat.id}"
-  subnet_id = "${aws_subnet.nat.id}"
-  tags = {
-    Name = "vuls"
-  }
-}
-
-resource "aws_eip" "nat" {
-  vpc = true
-  tags = {
-    Name = "vuls-nat"
-  }
-}
-
-resource "aws_route_table_association" "nat" {
-  subnet_id = "${aws_subnet.nat.id}"
-  route_table_id = "${aws_route_table.nat.id}"
-}
-
-resource "aws_route_table" "nat" {
-  vpc_id = "${var.vpc_id}"
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "${data.aws_internet_gateway.nat.id}"
-  }
-  tags = {
-    Name = "vuls-nat"
-  }
-}
-
-data "aws_internet_gateway" "nat" {
-  filter {
-    name = "attachment.vpc-id"
-    values = ["${var.vpc_id}"]
   }
 }
 
