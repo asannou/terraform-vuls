@@ -230,8 +230,10 @@ wait_command() {
   for i in $(seq 10)
   do
     status=$(list_command $1)
-    test "$status" = 'Success' && return
-    test "$status" = 'Failed' && return 1
+    case "$status" in
+      'Success') return ;;
+      'Failed') return 1 ;;
+    esac
     sleep 5
   done
   return 1
