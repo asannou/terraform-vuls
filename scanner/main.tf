@@ -18,6 +18,10 @@ variable "nat_gateway_id" {
   type = "string"
 }
 
+variable "availability_zone" {
+  type = "string"
+}
+
 variable "instance_type" {
   type = "string"
 }
@@ -26,14 +30,20 @@ variable "target_account_ids" {
   type = "list"
 }
 
+locals {
+  az_ids = "${data.aws_availability_zones.az.zone_ids}"
+  az_names = "${data.aws_availability_zones.az.names}"
+  instance_subnet_id = "${aws_subnet.vpce.*.id[index(local.az_names, var.availability_zone)]}"
+}
+
 resource "aws_subnet" "vpce" {
-  count = "${length(data.aws_availability_zones.az.zone_ids)}"
+  count = "${length(local.az_ids)}"
   vpc_id = "${var.vpc_id}"
-  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[count.index]}"
+  availability_zone_id = "${local.az_ids[count.index]}"
   cidr_block = "${cidrsubnet(var.cidr_block, 3, 1 + count.index)}"
   map_public_ip_on_launch = false
   tags = {
-    Name = "vuls-vpce-${data.aws_availability_zones.az.zone_ids[count.index]}"
+    Name = "vuls-vpce-${local.az_ids[count.index]}"
   }
 }
 
@@ -163,7 +173,7 @@ data "aws_iam_policy_document" "ssm" {
 resource "aws_instance" "vuls" {
   ami = "${data.aws_ami.ami.id}"
   instance_type = "${var.instance_type}"
-  subnet_id = "${aws_subnet.vpce.*.id[0]}"
+  subnet_id = "${local.instance_subnet_id}"
   associate_public_ip_address = false
   vpc_security_group_ids = [
     "${aws_security_group.egress.id}",
