@@ -154,7 +154,7 @@ resource "aws_s3_bucket_object" "vuls" {
   bucket = "${aws_s3_bucket.vuls.bucket}"
   key = "vuls-ssh-command.sh"
   source = "${module.vuls-ssh-command.filename}"
-  etag = "${md5(module.vuls-ssh-command.filename)}"
+  etag = "${filemd5(module.vuls-ssh-command.filename)}"
 }
 
 resource "aws_lambda_function" "lambda" {
