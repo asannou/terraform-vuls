@@ -297,6 +297,10 @@ resource "aws_security_group_rule" "vpce-ingress" {
   source_security_group_id = "${aws_security_group.scanner.id}"
 }
 
+output "instance_id" {
+  value = "${aws_instance.vuls.id}"
+}
+
 output "instance_subnet_id" {
   value = "${aws_instance.vuls.subnet_id}"
 }

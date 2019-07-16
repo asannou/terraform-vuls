@@ -40,3 +40,11 @@ module "scanner" {
   target_account_ids = ["${var.target_account_ids}"]
 }
 
+output "instance_id" {
+  value = "${module.scanner.instance_id}"
+}
+
+output "instance_subnet_id" {
+  value = "${module.scanner.instance_subnet_id}"
+}
+
