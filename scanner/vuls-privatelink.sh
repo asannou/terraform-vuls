@@ -155,6 +155,13 @@ describe_tag() {
     --query 'Tags[0].Value'
 }
 
+describe_instance_online() {
+  assumed_aws --output text \
+    ssm describe-instance-information \
+    --filters "Key=InstanceIds,Values=$1" \
+    --query 'InstanceInformationList[?PingStatus==`Online`].InstanceId'
+}
+
 send_command() {
   publickey="$1"
   shift
@@ -193,37 +200,30 @@ check_docker() {
 }
 
 create_vpces() {
-  describe_vpce_svc | while read vpce_svc
+  describe_vpce_svc | while read vpce_svc_id vpce_svc_name vpce_svc_lb vpce_svc_az
   do
-    set -- $vpce_svc
-    vpce_svc_id=$1
-    vpce_svc_name=$2
-    vpce_svc_lb=$3
-    vpce_svc_az=$(describe_az $4)
-    vpce_svc_subnet_id=$(describe_subnet $vpce_svc_az)
-
-    set -- $(create_vpce $vpce_svc_name $vpce_svc_subnet_id)
-    vpce_id=$1
-    vpce_name=$2
-
-    create_tag $vpce_id
-    unsuccessful=$(accept_vpce $vpce_svc_id $vpce_id)
-    test "$unsuccessful" != '[]' && continue
-    echo "$vpce_id $vpce_name $vpce_svc_lb"
+    vpce_svc_az_id=$(describe_az $vpce_svc_az)
+    vpce_svc_subnet_id=$(describe_subnet $vpce_svc_az_id)
+    create_vpce $vpce_svc_name $vpce_svc_subnet_id | while read vpce_id vpce_name
+    do
+      create_tag $vpce_id
+      unsuccessful=$(accept_vpce $vpce_svc_id $vpce_id)
+      test "$unsuccessful" != '[]' && continue 2
+      echo "$vpce_id $vpce_name $vpce_svc_lb"
+    done
   done
 }
 
 get_known_hosts_ids() {
-  cat $KNOWN_HOSTS_TEMP | while read host
+  cat $KNOWN_HOSTS_TEMP | while read hostname port id name
   do
-    set -- $host
-    printf '%s ' $3
+    echo $id
   done
 }
 
 send_public_key() {
   public_key="$(cat ssh/id_rsa.pub)"
-  send_command "$public_key" $(get_known_hosts_ids)
+  send_command "$public_key" $(get_known_hosts_ids | paste -s)
 }
 
 wait_command() {
@@ -255,45 +255,32 @@ __EOD__
 }
 
 make_server_configs() {
-  create_vpces | while read vpce
+  create_vpces | while read vpce_id vpce_name vpce_svc_lb
   do
-    set -- $vpce
-    vpce_id=$1
-    vpce_name=$2
-    vpce_svc_lb=$3
-    printf '%s ' $vpce_id
-
-    describe_listeners $vpce_svc_lb | while read listener
+    echo $vpce_id
+    describe_listeners $vpce_svc_lb | while read port target_group
     do
-      set -- $listener
-      port=$1
-      target_group=$2
-
-      set -- $(describe_target $target_group)
-      id=$1
-      state=$2
-
-      if [ "$state" = 'healthy' ]
-      then
-        if [ "$(describe_tag $id 'Vuls')" = "1" ]
+      describe_target $target_group | while read id state
+      do
+        if [ "$state" = 'healthy' ]
         then
-          name="$(describe_tag $id 'Name')"
-          test -z "$name" && name=$id
-          echo "$vpce_name $port $id $name" >> $KNOWN_HOSTS_TEMP
-          make_server_config $name $vpce_name $port >> config.toml
+          if [ "$(describe_tag $id 'Vuls')" = "1" ]
+          then
+            test -z "$(describe_instance_online $id)" && continue
+            name="$(describe_tag $id 'Name')"
+            test -z "$name" && name=$id
+            echo "$vpce_name $port $id $name" >> $KNOWN_HOSTS_TEMP
+            make_server_config $name $vpce_name $port >> config.toml
+          fi
         fi
-      fi
+      done
     done
   done
 }
 
 make_containers_configs() {
-  cat $KNOWN_HOSTS_TEMP | while read host
+  cat $KNOWN_HOSTS_TEMP | while read hostname port id name
   do
-    set -- $host
-    hostname=$1
-    port=$2
-    name=$4
     if check_docker $hostname $port
     then
       make_containers_config $name
@@ -303,26 +290,22 @@ make_containers_configs() {
 
 make_known_hosts() {
   command_id=$1
-  cat $KNOWN_HOSTS_TEMP | while read host
+  cat $KNOWN_HOSTS_TEMP | while read hostname port id
   do
-    set -- $host
-    hostname=$1
-    port=$2
-    id=$3
     hostkey=$(get_object $command_id $id)
     echo "[$hostname]:$port $hostkey"
   done > ssh/known_hosts
 }
 
 setup() {
-  vpce_ids=$(make_server_configs)
+  vpce_ids=$(make_server_configs | paste -s)
   trap "delete_vpces $vpce_ids; rm $KNOWN_HOSTS_TEMP" EXIT
 
   command_id=$(send_public_key)
-  test -z "$command_id" && return
+  test -n "$command_id"
 
   wait_vpces $vpce_ids
-  wait_command $command_id || return
+  wait_command $command_id
 
   make_known_hosts $command_id
   make_containers_configs

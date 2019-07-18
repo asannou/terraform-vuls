@@ -38,6 +38,10 @@ data "aws_iam_policy_document" "vuls-ssm" {
     resources = ["*"]
   }
   statement {
+    actions = ["ssm:DescribeInstanceInformation"]
+    resources = ["*"]
+  }
+  statement {
     actions = ["ssm:SendCommand"]
     resources = [
       "arn:aws:ssm:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:document/${aws_ssm_document.vuls.name}",
