@@ -11,7 +11,10 @@ echo "command=\"$COMMAND\" {{publickey}}" > $DOTSSH/authorized_keys
 chmod 700 $COMMAND
 chown -R $USER:$USER $DOTSSH
 
-cat /etc/ssh/ssh_host_ecdsa_key.pub
+PUBLICIP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+HOSTKEY=$(cat /etc/ssh/ssh_host_ecdsa_key.pub)
+printf '%s %s' $PUBLICIP "$HOSTKEY"
+
 exec > /dev/null
 
 if [ -e /etc/redhat-release ]

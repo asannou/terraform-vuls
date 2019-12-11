@@ -6,8 +6,8 @@ variable "scanner_account_id" {
   type = "string"
 }
 
-locals {
-  scanner_role = "EC2RoleVuls"
+variable "scanner_role" {
+  default = "EC2RoleVuls"
 }
 
 resource "aws_iam_role" "vuls" {
@@ -20,7 +20,7 @@ data "aws_iam_policy_document" "vuls" {
   statement {
     principals {
       type = "AWS"
-      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${local.scanner_role}"]
+      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
     }
     actions = ["sts:AssumeRole"]
   }
@@ -34,11 +34,7 @@ resource "aws_iam_policy" "vuls-ssm" {
 
 data "aws_iam_policy_document" "vuls-ssm" {
   statement {
-    actions = ["ec2:DescribeTags"]
-    resources = ["*"]
-  }
-  statement {
-    actions = ["ssm:DescribeInstanceInformation"]
+    actions = ["ec2:DescribeInstances"]
     resources = ["*"]
   }
   statement {
@@ -70,39 +66,6 @@ data "aws_iam_policy_document" "vuls-ssm" {
 resource "aws_iam_role_policy_attachment" "vuls-ssm" {
   role = "${aws_iam_role.vuls.name}"
   policy_arn = "${aws_iam_policy.vuls-ssm.arn}"
-}
-
-resource "aws_iam_policy" "vuls-privatelink" {
-  name = "VulsPrivateLink"
-  path = "/"
-  policy = "${data.aws_iam_policy_document.vuls-privatelink.json}"
-}
-
-data "aws_iam_policy_document" "vuls-privatelink" {
-  statement {
-    actions = [
-      "ec2:DescribeAvailabilityZones",
-      "ec2:DescribeInstances",
-      "ec2:DescribeVpcEndpointServiceConfigurations"
-    ]
-    resources = ["*"]
-  }
-  statement {
-    actions = ["apigateway:GET"]
-    resources = ["*"]
-  }
-  statement {
-    actions = [
-      "elasticloadbalancing:DescribeListeners",
-      "elasticloadbalancing:DescribeTargetHealth"
-    ]
-    resources = ["*"]
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "vuls-privatelink" {
-  role = "${aws_iam_role.vuls.name}"
-  policy_arn = "${aws_iam_policy.vuls-privatelink.arn}"
 }
 
 locals {
@@ -159,147 +122,5 @@ resource "aws_s3_bucket_object" "vuls" {
   key = "vuls-ssh-command.sh"
   source = "${module.vuls-ssh-command.filename}"
   etag = "${filemd5(module.vuls-ssh-command.filename)}"
-}
-
-resource "aws_lambda_function" "lambda" {
-  filename = "${data.archive_file.lambda.output_path}"
-  function_name = "vuls-accept-vpc-endpoint-connections"
-  role = "${aws_iam_role.lambda.arn}"
-  handler = "vuls-accept-vpc-endpoint-connections.handler"
-  runtime = "nodejs8.10"
-  timeout = "60"
-  source_code_hash = "${data.archive_file.lambda.output_base64sha256}"
-  environment {
-    variables = {
-      SERVICE_IDS = "${join(" ", local.vpce_svc_ids)}"
-    }
-  }
-  tags {
-    Name = "vuls"
-  }
-}
-
-data "archive_file" "lambda" {
-  type = "zip"
-  source_file = "${path.module}/vuls-accept-vpc-endpoint-connections.js"
-  output_path = "${path.module}/vuls-accept-vpc-endpoint-connections.zip"
-}
-
-resource "aws_iam_role" "lambda" {
-  name = "LambdaRoleVulsAcceptVpcEndpointConnections"
-  path = "/"
-  assume_role_policy = "${data.aws_iam_policy_document.lambda-role.json}"
-}
-
-data "aws_iam_policy_document" "lambda-role" {
-  statement {
-    effect = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type = "Service"
-      identifiers = ["lambda.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "lambda" {
-  role = "${aws_iam_role.lambda.name}"
-  policy_arn = "${aws_iam_policy.lambda.arn}"
-}
-
-resource "aws_iam_policy" "lambda" {
-  name = "AcceptVpcEndpointConnections"
-  path = "/"
-  policy = "${data.aws_iam_policy_document.lambda.json}"
-}
-
-data "aws_iam_policy_document" "lambda" {
-  statement {
-    effect = "Allow"
-    actions = ["ec2:AcceptVpcEndpointConnections"]
-    resources = ["*"]
-  }
-}
-
-locals {
-  api_http_method = "POST"
-  api_path = "accept-vpc-endpoint-connections"
-}
-
-resource "aws_api_gateway_rest_api" "vuls" {
-  name = "vuls"
-  policy = "${data.aws_iam_policy_document.api.json}"
-  endpoint_configuration {
-    types = ["PRIVATE"]
-  }
-}
-
-data "aws_iam_policy_document" "api" {
-  statement {
-    principals {
-      type = "AWS"
-      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${local.scanner_role}"]
-    }
-    actions = ["execute-api:Invoke"]
-    resources = ["arn:aws:execute-api:*:*:*/*/${local.api_http_method}/${local.api_path}"]
-  }
-}
-
-resource "aws_api_gateway_resource" "accept-vpc-endpoint-connections" {
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  parent_id = "${aws_api_gateway_rest_api.vuls.root_resource_id}"
-  path_part = "${local.api_path}"
-}
-
-resource "aws_api_gateway_method" "post-accept-vpc-endpoint-connections" {
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
-  http_method = "${local.api_http_method}"
-  authorization = "AWS_IAM"
-}
-
-resource "aws_api_gateway_integration" "post-accept-vpc-endpoint-connections" {
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
-  http_method = "${local.api_http_method}"
-  type = "AWS"
-  integration_http_method = "${local.api_http_method}"
-  uri = "${aws_lambda_function.lambda.invoke_arn}"
-}
-
-resource "aws_api_gateway_method_response" "200" {
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
-  http_method = "${local.api_http_method}"
-  status_code = "200"
-}
-
-resource "aws_api_gateway_integration_response" "post-accept-vpc-endpoint-connections" {
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  resource_id = "${aws_api_gateway_resource.accept-vpc-endpoint-connections.id}"
-  http_method = "${local.api_http_method}"
-  status_code = "${aws_api_gateway_method_response.200.status_code}"
-}
-
-resource "aws_lambda_permission" "vuls" {
-  action = "lambda:InvokeFunction"
-  function_name = "${aws_lambda_function.lambda.function_name}"
-  principal = "apigateway.amazonaws.com"
-  source_arn = "arn:aws:execute-api:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:${aws_api_gateway_rest_api.vuls.id}/*/${local.api_http_method}/${local.api_path}"
-}
-
-resource "aws_api_gateway_deployment" "vuls" {
-  depends_on = [
-    "aws_api_gateway_resource.accept-vpc-endpoint-connections",
-    "aws_api_gateway_method.post-accept-vpc-endpoint-connections",
-    "aws_api_gateway_method_response.200",
-    "aws_api_gateway_integration.post-accept-vpc-endpoint-connections",
-    "aws_api_gateway_integration_response.post-accept-vpc-endpoint-connections",
-  ]
-  variables {
-    depends_on = "${md5(aws_api_gateway_rest_api.vuls.policy)}"
-  }
-  rest_api_id = "${aws_api_gateway_rest_api.vuls.id}"
-  stage_name = "prod"
 }
 
