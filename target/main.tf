@@ -10,6 +10,10 @@ variable "scanner_role" {
   default = "EC2RoleVuls"
 }
 
+variable "vuls_version" {
+  default = "0.9.1"
+}
+
 resource "aws_iam_role" "vuls" {
   name = "VulsRole-${var.scanner_account_id}"
   path = "/"
@@ -114,7 +118,7 @@ resource "aws_s3_bucket" "vuls" {
 
 module "vuls-ssh-command" {
   source = "github.com/asannou/terraform-download-file"
-  url = "https://github.com/asannou/vuls-ssh-command/raw/master/vuls-ssh-command.sh"
+  url = "https://github.com/asannou/vuls-ssh-command/raw/${var.vuls_version}/vuls-ssh-command.sh"
 }
 
 resource "aws_s3_bucket_object" "vuls" {
