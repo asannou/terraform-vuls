@@ -15,7 +15,7 @@ variable "scanner_role" {
 }
 
 module "target" {
-  source = "../../target"
+  source = "github.com/asannou/terraform-vuls//target?ref=session-manager"
   scanner_account_id = "${var.scanner_account_id}"
   scanner_role = "${var.scanner_role}"
 }

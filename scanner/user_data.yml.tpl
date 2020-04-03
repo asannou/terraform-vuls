@@ -12,8 +12,6 @@ runcmd:
  - yum -y update
  - start amazon-ssm-agent
  - chkconfig yum-cron on
- - curl -L -o /root/vuls/awscurl-lite https://gist.github.com/asannou/3a86f9e85275f99bd1f9a5432adf2408/raw/awscurl-lite
- - chmod +x /root/vuls/awscurl-lite
 
 write_files:
  - encoding: b64
@@ -37,9 +35,9 @@ write_files:
    path: /etc/cron.weekly/remove-unused-docker-data.cron
    permissions: '0744'
  - encoding: b64
-   content: ${vuls-privatelink-sh}
+   content: ${vuls-sh}
    owner: root:root
-   path: /root/vuls/vuls-privatelink.sh
+   path: /root/vuls/vuls.sh
    permissions: '0744'
  - encoding: b64
    content: ${vuls-config}

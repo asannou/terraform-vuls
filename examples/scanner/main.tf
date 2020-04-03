@@ -31,7 +31,7 @@ variable "target_account_ids" {
 }
 
 module "scanner" {
-  source = "github.com/asannou/terraform-vuls//scanner"
+  source = "github.com/asannou/terraform-vuls//scanner?ref=session-manager"
   vpc_id = "${var.vpc_id}"
   cidr_block = "${var.cidr_block}"
   nat_gateway_id = "${var.nat_gateway_id}"

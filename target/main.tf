@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "vuls" {
 }
 
 resource "aws_iam_policy" "vuls-ssm" {
-  name = "VulsSSMAccess"
+  name = "VulsAccess-${var.scanner_account_id}"
   path = "/"
   policy = "${data.aws_iam_policy_document.vuls-ssm.json}"
 }
@@ -39,6 +39,10 @@ resource "aws_iam_policy" "vuls-ssm" {
 data "aws_iam_policy_document" "vuls-ssm" {
   statement {
     actions = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
+  statement {
+    actions = ["ssm:DescribeInstanceInformation"]
     resources = ["*"]
   }
   statement {
@@ -64,6 +68,28 @@ data "aws_iam_policy_document" "vuls-ssm" {
   statement {
     actions = ["s3:GetObject"]
     resources = ["arn:aws:s3:::${aws_s3_bucket.vuls.bucket}/*"]
+  }
+  statement {
+    actions = ["ssm:StartSession"]
+    resources = ["arn:aws:ssm:${data.aws_region.region.name}::document/AWS-StartSSHSession"]
+  }
+  statement {
+    actions = ["ssm:StartSession"]
+    resources = ["arn:aws:ec2:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:instance/*"]
+    condition {
+      test = "StringEquals"
+      variable = "ssm:resourceTag/Vuls"
+      values = ["1"]
+    }
+    condition {
+      test = "BoolIfExists"
+      variable = "ssm:SessionDocumentAccessCheck"
+      values = ["true"]
+    }
+  }
+  statement {
+    actions = ["ssm:TerminateSession"]
+    resources = ["arn:aws:ssm:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:session/*"]
   }
 }
 

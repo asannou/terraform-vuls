@@ -30,26 +30,18 @@ variable "target_account_ids" {
   type = "list"
 }
 
-locals {
-  az_ids = "${data.aws_availability_zones.az.zone_ids}"
-  az_names = "${data.aws_availability_zones.az.names}"
-  instance_subnet_id = "${aws_subnet.vpce.*.id[index(local.az_names, var.availability_zone)]}"
-}
-
-resource "aws_subnet" "vpce" {
-  count = "${length(local.az_ids)}"
+resource "aws_subnet" "vuls" {
   vpc_id = "${var.vpc_id}"
-  availability_zone_id = "${local.az_ids[count.index]}"
-  cidr_block = "${cidrsubnet(var.cidr_block, 3, 1 + count.index)}"
+  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[0]}"
+  cidr_block = "${var.cidr_block}"
   map_public_ip_on_launch = false
   tags = {
-    Name = "vuls-vpce-${local.az_ids[count.index]}"
+    Name = "vuls"
   }
 }
 
 resource "aws_route_table_association" "vuls" {
-  count = "${length(aws_subnet.vpce.*.id)}"
-  subnet_id = "${aws_subnet.vpce.*.id[count.index]}"
+  subnet_id = "${aws_subnet.vuls.id}"
   route_table_id = "${aws_route_table.vuls.id}"
 }
 
@@ -122,7 +114,7 @@ data "template_file" "user_data" {
     post-yum-security-cron = "${base64encode(file("${path.module}/post-yum-security.cron"))}"
     yum-clean-cron = "${base64encode(file("${path.module}/yum-clean.cron"))}"
     remove-unused-docker-data-cron = "${base64encode(file("${path.module}/remove-unused-docker-data.cron"))}"
-    vuls-privatelink-sh = "${base64encode(file("${path.module}/vuls-privatelink.sh"))}"
+    vuls-sh = "${base64encode(file("${path.module}/vuls.sh"))}"
     vuls-config = "${base64encode(file("${path.module}/config.toml.default"))}"
     vuls-cron = "${base64encode(file("${path.module}/vuls.cron"))}"
   }
@@ -173,11 +165,10 @@ data "aws_iam_policy_document" "ssm" {
 resource "aws_instance" "vuls" {
   ami = "${data.aws_ami.ami.id}"
   instance_type = "${var.instance_type}"
-  subnet_id = "${local.instance_subnet_id}"
+  subnet_id = "${aws_subnet.vuls.id}"
   associate_public_ip_address = false
   vpc_security_group_ids = [
     "${aws_security_group.egress.id}",
-    "${aws_security_group.scanner.id}"
   ]
   user_data_base64 = "${data.template_cloudinit_config.user_data.rendered}"
   iam_instance_profile = "${aws_iam_instance_profile.vuls.name}"
@@ -209,92 +200,6 @@ resource "aws_iam_role_policy_attachment" "vuls" {
   count = "${length(var.target_account_ids)}"
   role = "${aws_iam_role.vuls.name}"
   policy_arn = "${aws_iam_policy.vuls.*.arn[count.index]}"
-}
-
-resource "aws_iam_policy" "vuls-api" {
-  count = "${length(var.target_account_ids)}"
-  name = "VulsAPIGatewayInvoke-${var.target_account_ids[count.index]}"
-  policy = "${data.aws_iam_policy_document.vuls-api.*.json[count.index]}"
-}
-
-data "aws_iam_policy_document" "vuls-api" {
-  count = "${length(var.target_account_ids)}"
-  statement {
-    actions = ["execute-api:Invoke"]
-    resources = ["arn:aws:execute-api:${data.aws_region.region.name}:${var.target_account_ids[count.index]}:*"]
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "vuls-api" {
-  count = "${length(var.target_account_ids)}"
-  role = "${aws_iam_role.vuls.name}"
-  policy_arn = "${aws_iam_policy.vuls-api.*.arn[count.index]}"
-}
-
-resource "aws_iam_policy" "vuls-vpce" {
-  name = "VulsVpcEndpoint"
-  policy = "${data.aws_iam_policy_document.vuls-vpce.json}"
-}
-
-data "aws_iam_policy_document" "vuls-vpce" {
-  statement {
-    actions = [
-      "ec2:DescribeSubnets",
-      "ec2:DescribeSecurityGroups",
-      "ec2:DescribeVpcEndpoints"
-    ]
-    resources = ["*"]
-  }
-  statement {
-    actions = [
-      "ec2:CreateVpcEndpoint",
-      "ec2:DeleteVpcEndpoints"
-    ]
-    resources = ["*"]
-  }
-  statement {
-    actions = ["ec2:CreateTags"]
-    resources = ["*"]
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "vuls-vpce" {
-  role = "${aws_iam_role.vuls.name}"
-  policy_arn = "${aws_iam_policy.vuls-vpce.arn}"
-}
-
-resource "aws_security_group" "scanner" {
-  name = "vuls-scanner"
-  vpc_id = "${var.vpc_id}"
-  tags {
-    Name = "vuls-privatelink"
-  }
-}
-
-resource "aws_security_group_rule" "scanner-egress" {
-  security_group_id = "${aws_security_group.scanner.id}"
-  type = "egress"
-  protocol = "tcp"
-  from_port = 22000
-  to_port = 22050
-  source_security_group_id = "${aws_security_group.vpce.id}"
-}
-
-resource "aws_security_group" "vpce" {
-  name = "vuls-vpce"
-  vpc_id = "${var.vpc_id}"
-  tags {
-    Name = "vuls-privatelink"
-  }
-}
-
-resource "aws_security_group_rule" "vpce-ingress" {
-  security_group_id = "${aws_security_group.vpce.id}"
-  type = "ingress"
-  protocol = "tcp"
-  from_port = 22000
-  to_port = 22050
-  source_security_group_id = "${aws_security_group.scanner.id}"
 }
 
 output "instance_id" {

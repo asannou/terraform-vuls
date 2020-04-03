@@ -11,9 +11,7 @@ echo "command=\"$COMMAND\" {{publickey}}" > $DOTSSH/authorized_keys
 chmod 700 $COMMAND
 chown -R $USER:$USER $DOTSSH
 
-PUBLICIP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-HOSTKEY=$(cat /etc/ssh/ssh_host_ecdsa_key.pub)
-printf '%s %s' $PUBLICIP "$HOSTKEY"
+cat /etc/ssh/ssh_host_ecdsa_key.pub
 
 exec > /dev/null
 
