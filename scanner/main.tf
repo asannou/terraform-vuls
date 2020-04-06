@@ -1,9 +1,5 @@
 data "aws_region" "region" {}
 
-data "aws_availability_zones" "az" {
-  state = "available"
-}
-
 data "aws_caller_identity" "aws" {}
 
 variable "vpc_id" {
@@ -18,11 +14,11 @@ variable "nat_gateway_id" {
   type = "string"
 }
 
-variable "availability_zone" {
+variable "instance_type" {
   type = "string"
 }
 
-variable "instance_type" {
+variable "instance_public_key" {
   type = "string"
 }
 
@@ -32,7 +28,6 @@ variable "target_account_ids" {
 
 resource "aws_subnet" "vuls" {
   vpc_id = "${var.vpc_id}"
-  availability_zone_id = "${data.aws_availability_zones.az.zone_ids[0]}"
   cidr_block = "${var.cidr_block}"
   map_public_ip_on_launch = false
   tags = {
@@ -162,9 +157,15 @@ data "aws_iam_policy_document" "ssm" {
   }
 }
 
+resource "aws_key_pair" "vuls" {
+  key_name = "vuls"
+  public_key = "${var.instance_public_key}"
+}
+
 resource "aws_instance" "vuls" {
   ami = "${data.aws_ami.ami.id}"
   instance_type = "${var.instance_type}"
+  key_name = "${aws_key_pair.vuls.key_name}"
   subnet_id = "${aws_subnet.vuls.id}"
   associate_public_ip_address = false
   vpc_security_group_ids = [
