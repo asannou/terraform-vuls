@@ -24,7 +24,12 @@ data "aws_iam_policy_document" "vuls" {
   statement {
     principals {
       type = "AWS"
-      identifiers = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
+      identifiers = ["*"]
+    }
+    condition {
+      test = "ArnEquals"
+      variable = "aws:PrincipalArn"
+      values = ["arn:aws:iam::${var.scanner_account_id}:role/${var.scanner_role}"]
     }
     actions = ["sts:AssumeRole"]
   }
