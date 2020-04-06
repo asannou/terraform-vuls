@@ -89,7 +89,12 @@ data "aws_iam_policy_document" "vuls-ssm" {
   }
   statement {
     actions = ["ssm:TerminateSession"]
-    resources = ["arn:aws:ssm:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:session/*"]
+    resources = ["*"]
+    condition {
+      test = "StringEquals"
+      variable = "ssm:resourceTag/aws:ssmmessages:session-id"
+      values = ["$${aws:userid}"]
+    }
   }
 }
 
