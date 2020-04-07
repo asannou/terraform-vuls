@@ -82,10 +82,17 @@ describe_instance_online() {
   aws --output text \
     ssm describe-instance-information \
     --filters "Key=InstanceIds,Values=$1" \
-    --query 'InstanceInformationList[?PingStatus==`Online`].InstanceId'
+    --query 'InstanceInformationList[?PingStatus==`Online`].AgentVersion'
 }
 
-send_command() {
+check_ssm_agent() {
+  IFS=.
+  set -- $1
+  IFS=$' \t\n'
+  test "$1" -ge 2 && test "$2" -ge 3 && test "$3" -ge 700
+}
+
+create_vuls_user() {
   publickey="$1"
   shift
   aws --output text \
@@ -94,6 +101,14 @@ send_command() {
     --parameters publickey="$publickey" \
     --instance-ids $@ \
     --output-s3-bucket-name $BUCKET_NAME \
+    --query 'Command.CommandId' || true
+}
+
+update_ssm_agent() {
+  aws --output text \
+    ssm send-command \
+    --document-name AWS-UpdateSSMAgent \
+    --instance-ids $@ \
     --query 'Command.CommandId' || true
 }
 
@@ -121,6 +136,13 @@ check_docker() {
     'stty cols 1000; type docker' > /dev/null 2>&1
 }
 
+get_ids_to_update() {
+  cat $KNOWN_HOSTS_TEMP | while read id name version
+  do
+    check_ssm_agent $version || echo $id
+  done
+}
+
 get_known_hosts_ids() {
   cat $KNOWN_HOSTS_TEMP | while read id name
   do
@@ -128,12 +150,20 @@ get_known_hosts_ids() {
   done
 }
 
+update_ssm_agents() {
+  ids=$(get_ids_to_update | paste -s)
+  test -z "$ids" && return
+  update_ssm_agent $ids
+}
+
 send_public_key() {
   public_key="$(cat ssh/id_rsa.pub)"
-  send_command "$public_key" $(get_known_hosts_ids | paste -s)
+  ids=$(get_known_hosts_ids | paste -s)
+  create_vuls_user "$public_key" $ids
 }
 
 wait_command() {
+  test -z "$1" && return
   for i in $(seq 10)
   do
     status=$(list_command $1)
@@ -167,8 +197,9 @@ make_server_configs() {
     set -- $INSTANCE
     INSTANCE_ID=$1
     NAME=$2
-    test -z "$(describe_instance_online $INSTANCE_ID)" && continue
-    echo "$INSTANCE_ID $NAME" >> $KNOWN_HOSTS_TEMP
+    AGENT_VERSION=$(describe_instance_online $INSTANCE_ID)
+    test -z "$AGENT_VERSION" && continue
+    echo "$INSTANCE_ID $NAME $AGENT_VERSION" >> $KNOWN_HOSTS_TEMP
     make_server_config $NAME $INSTANCE_ID >> config.toml
   done
 }
@@ -202,8 +233,9 @@ make_known_hosts() {
 setup() {
   make_server_configs
 
+  wait_command "$(update_ssm_agents)"
+
   command_id=$(send_public_key)
-  test -n "$command_id"
   wait_command $command_id
 
   make_known_hosts $command_id

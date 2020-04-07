@@ -53,6 +53,7 @@ data "aws_iam_policy_document" "vuls-ssm" {
   statement {
     actions = ["ssm:SendCommand"]
     resources = [
+      "arn:aws:ssm:${data.aws_region.region.name}::document/AWS-UpdateSSMAgent",
       "arn:aws:ssm:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:document/${aws_ssm_document.vuls.name}",
       "arn:aws:s3:::${aws_s3_bucket.vuls.bucket}"
     ]
