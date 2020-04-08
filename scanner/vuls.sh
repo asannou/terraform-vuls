@@ -89,7 +89,7 @@ check_ssm_agent() {
   IFS=.
   set -- $1
   IFS=$' \t\n'
-  test "$1" -ge 2 && test "$2" -ge 3 && test "$3" -ge 700
+  test "$1" -ge 2 && test "$2" -ge 3 && test "$3" -ge 900
 }
 
 create_vuls_user() {
