@@ -15,8 +15,6 @@ ROLE_ARN=arn:aws:iam::$TARGET_ACCOUNT_ID:role/VulsRole-$ACCOUNT_ID
 ROLE_SESSION_NAME=$(curl -s $METADATA_URL/instance-id)
 BUCKET_NAME=vuls-ssm-$ACCOUNT_ID-$TARGET_ACCOUNT_ID
 
-KNOWN_HOSTS_TEMP=$(mktemp)
-
 DOCKER_SOCKET=/var/run/docker.sock
 SOCKGUARD_FILENAME=sockguard.sock
 SOCKGUARD_SOCKET=$PWD/$SOCKGUARD_FILENAME
@@ -28,6 +26,12 @@ DOCKER_OVAL_IMAGE=vuls/goval-dictionary
 DOCKER_AWS_BASE_IMAGE=amazon/aws-cli
 DOCKER_AWS_IMAGE=aws-cli-session-manager
 DOCKER_SOCKGUARD_IMAGE=buildkite/sockguard
+
+generate_ssh_key() {
+  test -d ssh && return
+  mkdir -m 700 ssh
+  ssh-keygen -N '' -f ssh/id_rsa
+}
 
 assume_role() {
   set -- $(aws --endpoint $STS_ENDPOINT \
@@ -131,20 +135,21 @@ check_docker() {
     -o ConnectTimeout=10 \
     -o StrictHostKeyChecking=yes \
     -o UserKnownHostsFile=ssh/known_hosts \
+    -F ssh/config \
     -i ssh/id_rsa \
     vuls@$1 \
-    'stty cols 1000; type docker' > /dev/null 2>&1
+    'stty cols 1000; docker ps' > /dev/null 2>&1
 }
 
 get_ids_to_update() {
-  cat $KNOWN_HOSTS_TEMP | while read id name version
+  while read id name version
   do
     check_ssm_agent $version || echo $id
   done
 }
 
 get_known_hosts_ids() {
-  cat $KNOWN_HOSTS_TEMP | while read id name
+  while read id name
   do
     echo $id
   done
@@ -185,12 +190,11 @@ __EOD__
 
 make_containers_config() {
   cat <<__EOD__
-[servers."$1".containers]
-includes = ["\${running}"]
+containersIncluded = ["\${running}"]
 __EOD__
 }
 
-make_server_configs() {
+make_instance_list() {
   describe_instances | while read INSTANCE
   do
     IFS=$'\t'
@@ -199,19 +203,20 @@ make_server_configs() {
     NAME=$2
     AGENT_VERSION=$(describe_instance_online $INSTANCE_ID)
     test -z "$AGENT_VERSION" && continue
-    echo "$INSTANCE_ID $NAME $AGENT_VERSION" >> $KNOWN_HOSTS_TEMP
-    make_server_config $NAME $INSTANCE_ID >> config.toml
+    echo "$INSTANCE_ID $NAME $AGENT_VERSION"
   done
 }
 
-make_containers_configs() {
-  cat $KNOWN_HOSTS_TEMP | while read id name
+make_server_configs() {
+  echo '[servers]'
+  while read id name version
   do
+    make_server_config $name $id
     if check_docker $id
     then
-      make_containers_config $name
+      make_containers_config
     fi
-  done >> config.toml
+  done
 }
 
 make_ssh_config() {
@@ -223,23 +228,11 @@ __EOD__
 
 make_known_hosts() {
   command_id=$1
-  cat $KNOWN_HOSTS_TEMP | while read id name
+  while read id name
   do
     hostkey=$(get_object $command_id $id)
     echo "$id $hostkey"
-  done > ssh/known_hosts
-}
-
-setup() {
-  make_server_configs
-
-  wait_command "$(update_ssm_agents)"
-
-  command_id=$(send_public_key)
-  wait_command $command_id
-
-  make_known_hosts $command_id
-  make_containers_configs
+  done
 }
 
 run_cve() {
@@ -270,17 +263,23 @@ run_vuls() {
     "$@"
 }
 
-if [ ! -d ssh ]
-then
-  mkdir -m 700 ssh
-  ssh-keygen -N '' -f ssh/id_rsa
-fi
+generate_ssh_key
 
 cp $(dirname $0)/config.toml.default config.toml
 
 assume_role
 
-setup
+temp_instance_list=$(mktemp)
+make_instance_list >> $temp_instance_list
+
+wait_command "$(update_ssm_agents < $temp_instance_list)"
+
+command_id=$(send_public_key < $temp_instance_list)
+wait_command $command_id
+
+make_known_hosts $command_id < $temp_instance_list > ssh/known_hosts
+make_server_configs < $temp_instance_list >> config.toml
+rm $temp_instance_list
 
 run_cve fetchnvd -last2y
 run_cve fetchjvn -last2y
