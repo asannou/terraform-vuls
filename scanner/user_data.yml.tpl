@@ -40,9 +40,9 @@ write_files:
    path: /root/vuls/vuls.sh
    permissions: '0744'
  - encoding: b64
-   content: ${vuls-config}
+   content: ${vuls-config-slack}
    owner: root:root
-   path: /root/vuls/config.toml.default
+   path: /root/vuls/config.slack.toml
    permissions: '0644'
  - encoding: b64
    content: ${vuls-cron}

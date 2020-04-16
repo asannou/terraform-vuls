@@ -22,8 +22,16 @@ variable "instance_public_key" {
   type = "string"
 }
 
-variable "target_account_ids" {
-  type = "list"
+variable "slack_channel" {
+  default = ""
+}
+
+variable "slack_auth_user" {
+  default = ""
+}
+
+variable "slack_notify_users" {
+  default = []
 }
 
 resource "aws_subnet" "vuls" {
@@ -110,8 +118,17 @@ data "template_file" "user_data" {
     yum-clean-cron = "${base64encode(file("${path.module}/yum-clean.cron"))}"
     remove-unused-docker-data-cron = "${base64encode(file("${path.module}/remove-unused-docker-data.cron"))}"
     vuls-sh = "${base64encode(file("${path.module}/vuls.sh"))}"
-    vuls-config = "${base64encode(file("${path.module}/config.toml.default"))}"
+    vuls-config-slack = "${base64encode(data.template_file.config_slack.rendered)}"
     vuls-cron = "${base64encode(file("${path.module}/vuls.cron"))}"
+  }
+}
+
+data "template_file" "config_slack" {
+  template = "${file("${path.module}/config.slack.toml.tpl")}"
+  vars {
+    channel = "${var.slack_channel}"
+    authUser = "${var.slack_auth_user}"
+    notifyUsers = "${jsonencode(var.slack_notify_users)}"
   }
 }
 
@@ -142,19 +159,39 @@ resource "aws_iam_role_policy_attachment" "ec2-ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_policy" "ssm" {
-  name = "VulsSSMStartSession"
-  path = "/"
-  policy = "${data.aws_iam_policy_document.ssm.json}"
+resource "aws_iam_policy" "ec2-sts" {
+  name = "VulsAssumeRole"
+  policy = "${data.aws_iam_policy_document.ec2-sts.json}"
 }
 
-data "aws_iam_policy_document" "ssm" {
+data "aws_iam_policy_document" "ec2-sts" {
   statement {
-    actions = ["ssm:StartSession"]
-    resources = [
-      "arn:aws:ec2:${data.aws_region.region.name}:${data.aws_caller_identity.aws.account_id}:instance/${aws_instance.vuls.id}"
-    ]
+    actions = ["sts:AssumeRole"]
+    resources = ["arn:aws:iam::*:role/VulsRole-${data.aws_caller_identity.aws.account_id}"]
   }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2-sts" {
+  role = "${aws_iam_role.vuls.name}"
+  policy_arn = "${aws_iam_policy.ec2-sts.arn}"
+}
+
+resource "aws_iam_policy" "ec2-secretsmanager" {
+  name = "VulsGetSecretValue"
+  path = "/"
+  policy = "${data.aws_iam_policy_document.ec2-secretsmanager.json}"
+}
+
+data "aws_iam_policy_document" "ec2-secretsmanager" {
+  statement {
+    actions = ["secretsmanager:GetSecretValue"],
+    resources = ["${aws_secretsmanager_secret.vuls.arn}"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2-secretsmanager" {
+  role = "${aws_iam_role.vuls.name}"
+  policy_arn = "${aws_iam_policy.ec2-secretsmanager.arn}"
 }
 
 resource "aws_key_pair" "vuls" {
@@ -183,24 +220,18 @@ resource "aws_instance" "vuls" {
   }
 }
 
-resource "aws_iam_policy" "vuls" {
-  count = "${length(var.target_account_ids)}"
-  name = "VulsAssumeRole-${var.target_account_ids[count.index]}"
-  policy = "${data.aws_iam_policy_document.vuls.*.json[count.index]}"
+resource "aws_secretsmanager_secret" "vuls" {
+  name = "vuls-slack-webhook-url"
 }
 
-data "aws_iam_policy_document" "vuls" {
-  count = "${length(var.target_account_ids)}"
-  statement {
-    actions = ["sts:AssumeRole"]
-    resources = ["arn:aws:iam::${var.target_account_ids[count.index]}:role/VulsRole-${data.aws_caller_identity.aws.account_id}"]
+resource "aws_secretsmanager_secret_version" "vuls" {
+  secret_id = "${aws_secretsmanager_secret.vuls.id}"
+  secret_string = "https://hooks.slack.com/services/abc123/defghijklmnopqrstuvwxyz"
+  lifecycle {
+    ignore_changes = [
+      "secret_string"
+    ]
   }
-}
-
-resource "aws_iam_role_policy_attachment" "vuls" {
-  count = "${length(var.target_account_ids)}"
-  role = "${aws_iam_role.vuls.name}"
-  policy_arn = "${aws_iam_policy.vuls.*.arn[count.index]}"
 }
 
 output "instance_id" {

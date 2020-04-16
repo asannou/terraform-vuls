@@ -8,8 +8,9 @@ export AWS_DEFAULT_REGION=$(curl -s $METADATA_URL/placement/availability-zone | 
 
 STS_ENDPOINT=https://sts.$AWS_DEFAULT_REGION.amazonaws.com
 ACCOUNT_ID=$(aws --endpoint $STS_ENDPOINT sts get-caller-identity --output text --query Account)
-TARGET_ACCOUNT_ID=$1
-shift
+TARGET_ACCOUNT_ID=$1 && shift
+TARGET_INSTANCE_TAG_NAME=Vuls
+TARGET_INSTANCE_TAG_VALUE=1
 
 ROLE_ARN=arn:aws:iam::$TARGET_ACCOUNT_ID:role/VulsRole-$ACCOUNT_ID
 ROLE_SESSION_NAME=$(curl -s $METADATA_URL/instance-id)
@@ -26,6 +27,8 @@ DOCKER_OVAL_IMAGE=vuls/goval-dictionary
 DOCKER_AWS_BASE_IMAGE=amazon/aws-cli
 DOCKER_AWS_IMAGE=aws-cli-session-manager
 DOCKER_SOCKGUARD_IMAGE=buildkite/sockguard
+
+SLACK_WEBHOOK_URL_SECRET_ID=vuls-slack-webhook-url
 
 generate_ssh_key() {
   test -d ssh && return
@@ -78,7 +81,7 @@ remove_sockguard() {
 describe_instances() {
   aws --output text \
     ec2 describe-instances \
-    --filters 'Name=instance-state-name,Values=running' 'Name=tag:Vuls,Values=1' \
+    --filters 'Name=instance-state-name,Values=running' "Name=tag:$TARGET_INSTANCE_TAG_NAME,Values=$TARGET_INSTANCE_TAG_VALUE" \
     --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`Name`].Value|[0]]'
 }
 
@@ -97,8 +100,7 @@ check_ssm_agent() {
 }
 
 create_vuls_user() {
-  publickey="$1"
-  shift
+  publickey="$1" && shift
   aws --output text \
     ssm send-command \
     --document-name CreateVulsUser \
@@ -129,6 +131,13 @@ get_object() {
     s3://$BUCKET_NAME/$1/$2/awsrunShellScript/runShellScript/stdout -
 }
 
+get_secret_value() {
+  aws --output text \
+    secretsmanager get-secret-value \
+    --secret-id $1 \
+    --query SecretString
+}
+
 check_docker() {
   ssh -n \
     -o ConnectionAttempts=3 \
@@ -149,7 +158,7 @@ get_ids_to_update() {
 }
 
 get_known_hosts_ids() {
-  while read id name
+  while read id name version
   do
     echo $id
   done
@@ -181,6 +190,24 @@ wait_command() {
   return 1
 }
 
+make_default_config() {
+  cat <<__EOD__
+[default]
+port = "22"
+user = "vuls"
+keyPath = "/root/.ssh/id_rsa"
+
+__EOD__
+}
+
+make_slack_config() {
+  cat config.slack.toml
+  cat <<__EOD__
+hookURL = "$(get_secret_value $SLACK_WEBHOOK_URL_SECRET_ID)"
+
+__EOD__
+}
+
 make_server_config() {
   cat <<__EOD__
 [servers."$1"]
@@ -190,20 +217,21 @@ __EOD__
 
 make_containers_config() {
   cat <<__EOD__
+containerType = "docker"
 containersIncluded = ["\${running}"]
 __EOD__
 }
 
 make_instance_list() {
-  describe_instances | while read INSTANCE
+  describe_instances | while read instance
   do
     IFS=$'\t'
-    set -- $INSTANCE
-    INSTANCE_ID=$1
-    NAME=$2
-    AGENT_VERSION=$(describe_instance_online $INSTANCE_ID)
-    test -z "$AGENT_VERSION" && continue
-    echo "$INSTANCE_ID $NAME $AGENT_VERSION"
+    set -- $instance
+    instance_id=$1
+    name=$2
+    agent_version=$(describe_instance_online $instance_id)
+    test -z "$agent_version" && continue
+    echo "$instance_id $name $agent_version"
   done
 }
 
@@ -228,7 +256,7 @@ __EOD__
 
 make_known_hosts() {
   command_id=$1
-  while read id name
+  while read id name version
   do
     hostkey=$(get_object $command_id $id)
     echo "$id $hostkey"
@@ -265,7 +293,8 @@ run_vuls() {
 
 generate_ssh_key
 
-cp $(dirname $0)/config.toml.default config.toml
+make_default_config > config.toml
+make_slack_config >> config.toml
 
 assume_role
 
@@ -279,6 +308,7 @@ wait_command $command_id
 
 make_known_hosts $command_id < $temp_instance_list > ssh/known_hosts
 make_server_configs < $temp_instance_list >> config.toml
+
 rm $temp_instance_list
 
 run_cve fetchnvd -last2y

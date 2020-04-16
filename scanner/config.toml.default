@@ -1,5 +1,0 @@
-[default]
-port = "22"
-user = "vuls"
-keyPath = "/root/.ssh/id_rsa"
-
