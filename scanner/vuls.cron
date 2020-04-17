@@ -1,3 +1,4 @@
 #!/bin/bash
 cd /root/vuls
+./vuls-fetch.sh > /dev/null
 #./vuls.sh 123456789012 -lang=ja -to-slack > /dev/null

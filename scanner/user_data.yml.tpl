@@ -35,6 +35,11 @@ write_files:
    path: /etc/cron.weekly/remove-unused-docker-data.cron
    permissions: '0744'
  - encoding: b64
+   content: ${vuls-fetch-sh}
+   owner: root:root
+   path: /root/vuls/vuls-fetch.sh
+   permissions: '0744'
+ - encoding: b64
    content: ${vuls-sh}
    owner: root:root
    path: /root/vuls/vuls.sh

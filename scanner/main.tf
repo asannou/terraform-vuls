@@ -117,6 +117,7 @@ data "template_file" "user_data" {
     post-yum-security-cron = "${base64encode(file("${path.module}/post-yum-security.cron"))}"
     yum-clean-cron = "${base64encode(file("${path.module}/yum-clean.cron"))}"
     remove-unused-docker-data-cron = "${base64encode(file("${path.module}/remove-unused-docker-data.cron"))}"
+    vuls-fetch-sh = "${base64encode(file("${path.module}/vuls-fetch.sh"))}"
     vuls-sh = "${base64encode(file("${path.module}/vuls.sh"))}"
     vuls-config-slack = "${base64encode(data.template_file.config_slack.rendered)}"
     vuls-cron = "${base64encode(file("${path.module}/vuls.cron"))}"
