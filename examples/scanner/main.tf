@@ -18,16 +18,16 @@ variable "nat_gateway_id" {
   type = "string"
 }
 
-variable "availability_zone" {
-  type = "string"
-}
-
 variable "instance_type" {
   type = "string"
 }
 
-variable "target_account_ids" {
-  type = "list"
+variable "instance_public_key" {
+  type = "string"
+}
+
+variable "slack_channel" {
+  type = "string"
 }
 
 module "scanner" {
@@ -35,9 +35,9 @@ module "scanner" {
   vpc_id = "${var.vpc_id}"
   cidr_block = "${var.cidr_block}"
   nat_gateway_id = "${var.nat_gateway_id}"
-  availability_zone = "${var.availability_zone}"
   instance_type = "${var.instance_type}"
-  target_account_ids = ["${var.target_account_ids}"]
+  instance_public_key = "${var.instance_public_key}"
+  slack_channel = "${var.slack_channel}"
 }
 
 output "instance_id" {
