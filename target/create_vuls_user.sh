@@ -4,7 +4,7 @@ USER=vuls
 DOTSSH=/home/$USER/.ssh
 COMMAND=$DOTSSH/vuls-ssh-command.sh
 
-adduser -m $USER
+useradd -m $USER
 mkdir -m 700 $DOTSSH
 aws s3 cp {{sshcommand}} $COMMAND > /dev/null
 echo "command=\"$COMMAND\" {{publickey}}" > $DOTSSH/authorized_keys
