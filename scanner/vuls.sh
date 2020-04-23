@@ -20,7 +20,7 @@ DOCKER_SOCKET=/var/run/docker.sock
 SOCKGUARD_FILENAME=sockguard.sock
 SOCKGUARD_SOCKET=$PWD/$SOCKGUARD_FILENAME
 
-DOCKER_BASE_IMAGE=vuls/vuls:0.9.1
+DOCKER_BASE_IMAGE=vuls/vuls:0.9.3
 DOCKER_IMAGE=vuls-docker
 DOCKER_AWS_BASE_IMAGE=amazon/aws-cli
 DOCKER_AWS_IMAGE=aws-cli-session-manager
@@ -45,10 +45,12 @@ assume_role() {
 }
 
 build_images() {
+  docker pull $DOCKER_BASE_IMAGE
   docker build -t $DOCKER_IMAGE - <<__EOD__
 FROM $DOCKER_BASE_IMAGE
 RUN apk --no-cache add docker
 __EOD__
+  docker pull $DOCKER_AWS_BASE_IMAGE
   docker build -t $DOCKER_AWS_IMAGE - <<__EOD__
 FROM $DOCKER_AWS_BASE_IMAGE
 RUN curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_64bit/session-manager-plugin.rpm" -o "session-manager-plugin.rpm" \

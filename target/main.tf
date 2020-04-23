@@ -11,7 +11,7 @@ variable "scanner_role" {
 }
 
 variable "vuls_version" {
-  default = "0.9.1"
+  default = "v0.9.3"
 }
 
 resource "aws_iam_role" "vuls" {
