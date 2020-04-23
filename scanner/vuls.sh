@@ -196,6 +196,7 @@ make_default_config() {
 port = "22"
 user = "vuls"
 keyPath = "/root/.ssh/id_rsa"
+scanMode = ["fast-root"]
 
 __EOD__
 }
