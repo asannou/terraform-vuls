@@ -303,5 +303,6 @@ trap remove_sockguard EXIT
 run_sockguard
 make_ssh_config > ssh/config
 
-run_vuls scan && run_vuls report "$@" || true
+run_vuls scan || true
+run_vuls report "$@"
 
