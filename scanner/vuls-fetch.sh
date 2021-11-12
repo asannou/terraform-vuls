@@ -2,12 +2,15 @@
 
 set -eu
 
-DOCKER_CVE_IMAGE=vuls/go-cve-dictionary:0.6.2
-DOCKER_OVAL_IMAGE=vuls/goval-dictionary:0.3.5
-DOCKER_GOST_IMAGE=asannou/gost:v0.1.10
+CVE_VERSION=0.6.2
+OVAL_VERSION=0.3.5
+GOST_VERSION=0.1.10
+
+DOCKER_CVE_IMAGE=vuls/go-cve-dictionary:$CVE_VERSION
+DOCKER_OVAL_IMAGE=vuls/goval-dictionary:$OVAL_VERSION
+DOCKER_GOST_IMAGE=asannou/gost:$GOST_VERSION
 
 run_cve() {
-  docker pull $DOCKER_CVE_IMAGE
   docker run --rm -i \
     -v $PWD:/vuls \
     -v $PWD/go-cve-dictionary-log:/var/log/vuls \
@@ -16,7 +19,6 @@ run_cve() {
 }
 
 fetch_oval() {
-  docker pull $DOCKER_OVAL_IMAGE
   docker run --rm -i \
     -v $PWD:/vuls \
     -v $PWD/goval-dictionary-log:/var/log/vuls \
@@ -25,7 +27,6 @@ fetch_oval() {
 }
 
 fetch_gost() {
-  docker pull $DOCKER_GOST_IMAGE
   docker run --rm -i \
     -v $PWD:/vuls \
     -v $PWD/gost-log:/var/log/gost \

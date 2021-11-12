@@ -1,0 +1,10 @@
+diff --git a/Dockerfile b/Dockerfile
+index 95aaf03..f8ce33e 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,4 +1,4 @@
+-FROM golang:alpine as builder
++FROM golang:1.14-alpine as builder
+ 
+ RUN apk add --no-cache \
+         git \

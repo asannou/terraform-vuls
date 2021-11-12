@@ -45,7 +45,6 @@ assume_role() {
 }
 
 build_images() {
-  docker pull $DOCKER_BASE_IMAGE
   docker build -t $DOCKER_IMAGE - <<__EOD__
 FROM $DOCKER_BASE_IMAGE
 RUN apk --no-cache add docker
@@ -53,7 +52,7 @@ __EOD__
   docker pull $DOCKER_AWS_BASE_IMAGE
   docker build -t $DOCKER_AWS_IMAGE - <<__EOD__
 FROM $DOCKER_AWS_BASE_IMAGE
-RUN curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_64bit/session-manager-plugin.rpm" -o "session-manager-plugin.rpm" \
+RUN curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_arm64/session-manager-plugin.rpm" -o "session-manager-plugin.rpm" \
   && yum install -y session-manager-plugin.rpm \
   && rm session-manager-plugin.rpm
 __EOD__
@@ -147,7 +146,7 @@ check_docker() {
     -F ssh/config \
     -i ssh/id_rsa \
     vuls@$1 \
-    'stty cols 1000; docker ps' > /dev/null 2>&1
+    'stty cols 1000; docker ps' > /dev/null
 }
 
 get_ids_to_update() {
@@ -196,7 +195,7 @@ make_default_config() {
 port = "22"
 user = "vuls"
 keyPath = "/root/.ssh/id_rsa"
-scanMode = ["fast-root"]
+#scanMode = ["fast-root"]
 
 __EOD__
 }
@@ -279,6 +278,7 @@ run_vuls() {
 }
 
 generate_ssh_key
+make_ssh_config > ssh/config
 
 make_default_config > config.toml
 make_slack_config >> config.toml
@@ -301,7 +301,6 @@ rm $temp_instance_list
 build_images
 trap remove_sockguard EXIT
 run_sockguard
-make_ssh_config > ssh/config
 
 run_vuls scan || true
 run_vuls report "$@"

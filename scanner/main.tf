@@ -16,10 +16,7 @@ variable "nat_gateway_id" {
 
 variable "instance_type" {
   type = "string"
-}
-
-variable "instance_public_key" {
-  type = "string"
+  default = "t4g.medium"
 }
 
 variable "slack_channel" {
@@ -76,29 +73,8 @@ resource "aws_security_group_rule" "egress" {
   cidr_blocks = ["0.0.0.0/0"]
 }
 
-data "aws_ami" "ami" {
-  most_recent = true
-  owners = ["amazon"]
-  filter {
-    name = "architecture"
-    values = ["x86_64"]
-  }
-  filter {
-    name = "root-device-type"
-    values = ["ebs"]
-  }
-  filter {
-    name = "name"
-    values = ["amzn-ami-*-amazon-ecs-optimized"]
-  }
-  filter {
-    name = "virtualization-type"
-    values = ["hvm"]
-  }
-  filter {
-    name = "block-device-mapping.volume-type"
-    values = ["gp2"]
-  }
+data "aws_ssm_parameter" "image_id" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/arm64/recommended/image_id"
 }
 
 data "template_cloudinit_config" "user_data" {
@@ -114,13 +90,19 @@ data "template_file" "user_data" {
   template = "${file("${path.module}/user_data.yml.tpl")}"
   vars {
     docker-logrotate = "${base64encode(file("${path.module}/docker.logrotate"))}"
-    post-yum-security-cron = "${base64encode(file("${path.module}/post-yum-security.cron"))}"
+    yum-cron-security-conf = "${base64encode(file("${path.module}/yum-cron-security.conf"))}"
+    yum-security-cron = "${base64encode(file("${path.module}/yum-security.cron"))}"
     yum-clean-cron = "${base64encode(file("${path.module}/yum-clean.cron"))}"
+    vuls-cron = "${base64encode(file("${path.module}/vuls.cron"))}"
     remove-unused-docker-data-cron = "${base64encode(file("${path.module}/remove-unused-docker-data.cron"))}"
+    post-yum-security-cron = "${base64encode(file("${path.module}/post-yum-security.cron"))}"
+    gost-patch = "${base64encode(file("${path.module}/gost.patch"))}"
+    vuls-patch = "${base64encode(file("${path.module}/vuls.patch"))}"
+    sockguard-patch = "${base64encode(file("${path.module}/sockguard.patch"))}"
+    vuls-build-sh = "${base64encode(file("${path.module}/vuls-build.sh"))}"
     vuls-fetch-sh = "${base64encode(file("${path.module}/vuls-fetch.sh"))}"
     vuls-sh = "${base64encode(file("${path.module}/vuls.sh"))}"
     vuls-config-slack = "${base64encode(data.template_file.config_slack.rendered)}"
-    vuls-cron = "${base64encode(file("${path.module}/vuls.cron"))}"
   }
 }
 
@@ -195,15 +177,9 @@ resource "aws_iam_role_policy_attachment" "ec2-secretsmanager" {
   policy_arn = "${aws_iam_policy.ec2-secretsmanager.arn}"
 }
 
-resource "aws_key_pair" "vuls" {
-  key_name = "vuls"
-  public_key = "${var.instance_public_key}"
-}
-
 resource "aws_instance" "vuls" {
-  ami = "${data.aws_ami.ami.id}"
+  ami = "${data.aws_ssm_parameter.image_id.value}"
   instance_type = "${var.instance_type}"
-  key_name = "${aws_key_pair.vuls.key_name}"
   subnet_id = "${aws_subnet.vuls.id}"
   associate_public_ip_address = false
   vpc_security_group_ids = [

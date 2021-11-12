@@ -1,0 +1,13 @@
+diff --git a/Dockerfile b/Dockerfile
+index 1f6478b..500c618 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -5,7 +5,7 @@ WORKDIR /go/src/github.com/buildkite/sockguard
+ ADD go.mod go.sum ./
+ RUN go mod download
+ COPY . .
+-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
++RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+   go build -a -installsuffix cgo -ldflags="-w -s" -o /go/bin/sockguard
+ 
+ FROM scratch
